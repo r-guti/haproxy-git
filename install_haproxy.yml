@@ -34,9 +34,6 @@
     - name: Generate an OpenSSL private key
       community.crypto.openssl_privatekey:
         path: "/etc/ssl/certs/{{ server_hostname }}_privkey.pem"
-        mode: 0644
-        owner: root
-        group: root
         size: "{{ key_size }}"
         type: "{{ key_type }}"
         backup: yes
@@ -44,9 +41,6 @@
     - name: Generate an OpenSSL Certificate Signing Request with Subject www.lab.com
       community.crypto.openssl_csr:
         path: "/etc/ssl/certs/{{ server_hostname }}.csr"
-        mode: 0644
-        owner: root
-        group: root
         privatekey_path: "/etc/ssl/certs/{{ server_hostname }}_privkey.pem"
         country_name: "{{ country_name }}"
         organization_name: "{{ organization_name }}"
@@ -56,12 +50,6 @@
     - name: Generate a Self Signed OpenSSL certificate
       community.crypto.x509_certificate:
         path: "/etc/ssl/certs/{{ server_hostname }}_cert.pem"
-        mode: 0644
-        owner: root
-        group: root
         privatekey_path: "/etc/ssl/certs/{{ server_hostname }}_privkey.pem"
         csr_path: "/etc/ssl/certs/{{ server_hostname }}.csr"
         provider: selfsigned
-        owner: root
-        group: root
-        mode: 0644
