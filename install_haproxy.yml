@@ -11,14 +11,45 @@
       changed_when: false
     when: ansible_distribution_version == "Ubuntu"
 
-  - name: copy file
-    tags: haproxycfg
-    copy:
-      src: haproxy.cfg
-      dest: /etc/haproxy.cfg
-      owner: root
-      group: root
-      mode: 0644
+  - name: install UFW and HAProxy
+    package:
+      name:
+        - ufw
+        - haproxy
+      state: latest
+    when: ansible_distribution == "Ubuntu"
+
+  - name: start and enable UFW
+    tags: ufw-on
+    service:
+      name: ufw
+      state: started
+      enabled: yes
+
+  - name: Enable UFW
+    community.general.ufw:
+      state: enabled
+
+  - name: Allow SSH for internal network 192.168.50.0/24
+    community.general.ufw:
+      rule: allow
+      port: 22
+      proto: tcp
+      from_ip: 192.168.50.0/24
+
+  - name: Allow only http and https
+    community.general.ufw:
+      rule: allow
+      port: "{{ item }}"
+      proto: tcp
+    loop:
+      - 80
+      - 443
+
+  - name: Start HAProxy
+    service:
+      name: haproxy
+      state: started
 
 - hosts: all
   become: true
@@ -33,7 +64,7 @@
   tasks:
     - name: Generate an OpenSSL private key
       community.crypto.openssl_privatekey:
-        path: "/etc/ssl/certs/{{ server_hostname }}_privkey.pem"
+        path: "/etc/ssl/certs/{{ server_hostname }}.pem.key"
         size: "{{ key_size }}"
         type: "{{ key_type }}"
         backup: yes
@@ -41,7 +72,7 @@
     - name: Generate an OpenSSL Certificate Signing Request with Subject www.lab.com
       community.crypto.openssl_csr:
         path: "/etc/ssl/certs/{{ server_hostname }}.csr"
-        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}_privkey.pem"
+        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.key"
         country_name: "{{ country_name }}"
         organization_name: "{{ organization_name }}"
         email_address: "{{ email_address }}"
@@ -49,7 +80,22 @@
 
     - name: Generate a Self Signed OpenSSL certificate
       community.crypto.x509_certificate:
-        path: "/etc/ssl/certs/{{ server_hostname }}_cert.pem"
-        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}_privkey.pem"
+        path: "/etc/ssl/certs/{{ server_hostname }}.pem"
+        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.key"
         csr_path: "/etc/ssl/certs/{{ server_hostname }}.csr"
         provider: selfsigned
+
+    - name: copy file
+      tags: haproxycfg
+      copy:
+        src: haproxy.cfg
+        dest: /etc/haproxy/haproxy.cfg
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Restart HAProxy to load the config
+      tags: restart-h
+      service:
+        name: haproxy
+        state: restarted

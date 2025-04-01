@@ -1,0 +1,51 @@
+---
+
+- hosts: all
+  become: true
+  tasks:
+
+  - name: check if ssl files exists
+    stat:
+      path: /etc/ssl/certs/www.lab*
+    register: file_status
+
+  - name: delete www.lab.com ssl files
+    file:
+      path: /etc/ssl/certs/www.lab*
+      state: absent
+    register: delete_result
+    when: file_status.stat.exists
+
+  - name: show delete result
+    debug:
+      var: delete_result
+
+  - name: stop UFW service
+    ansible.builtin.systemd:
+      name: ufw
+      state: stopped
+      enabled: false
+
+  - name: remove UFW package
+    package:
+      name: ufw
+      state: absent
+
+  - name: stop haproxy service
+    tags: haproxy
+    service:
+      name: haproxy
+      state: stopped
+      enabled: no
+
+  - name: remove HAProxy package
+    tags: haproxy
+    package:
+      name: haproxy
+      state: absent
+      purge: yes
+
+  - name: remove HAProxy from systemd
+    file:
+      path: /etc/systemd/system/haproxy.service
+      state: absent
