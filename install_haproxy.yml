@@ -45,6 +45,9 @@
     loop:
       - 80
       - 443
+      - 3000
+      - 81
+      - 9000
 
   - name: Start HAProxy
     service:
@@ -54,41 +57,100 @@
 - hosts: all
   become: true
   vars:
-    - server_hostname: www.lab.com
+    - server_hostname: lab
     - key_size: 4096
     - passphrase: 123
     - key_type: RSA # Others include DSA, ECC, Ed25519, Ed448, X25519, X448
     - country_name: US
     - email_address: [a@a.com]
     - organization_name: IT
+    - common_name: www.lab.com
   tasks:
     - name: Generate an OpenSSL private key
+      tags: certs
       community.crypto.openssl_privatekey:
-        path: "/etc/ssl/certs/{{ server_hostname }}.pem.key"
+        path: "/etc/ssl/certs/{{ server_hostname }}.pem.rsa.key"
         size: "{{ key_size }}"
         type: "{{ key_type }}"
         backup: yes
 
-    - name: Generate an OpenSSL Certificate Signing Request with Subject www.lab.com
+    - name: Generate an OpenSSL Certificate Signing Request with Subject *.lab.com
+      tags: certs
       community.crypto.openssl_csr:
-        path: "/etc/ssl/certs/{{ server_hostname }}.csr"
-        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.key"
+        path: "/etc/ssl/certs/{{ server_hostname }}.rsa.csr"
+        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.rsa.key"
         country_name: "{{ country_name }}"
         organization_name: "{{ organization_name }}"
         email_address: "{{ email_address }}"
-        common_name: "{{ server_hostname }}"
+        common_name: "{{ common_name }}"
 
     - name: Generate a Self Signed OpenSSL certificate
+      tags: certs
       community.crypto.x509_certificate:
-        path: "/etc/ssl/certs/{{ server_hostname }}.pem"
-        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.key"
-        csr_path: "/etc/ssl/certs/{{ server_hostname }}.csr"
+        path: "/etc/ssl/certs/{{ server_hostname }}.pem.rsa"
+        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.rsa.key"
+        csr_path: "/etc/ssl/certs/{{ server_hostname }}.rsa.csr"
         provider: selfsigned
 
-    - name: copy file
+- hosts: all
+  become: true
+  vars:
+    - server_hostname: lab
+    - key_size: 256
+    - country_name: US
+    - email_address: a@a.com
+    - organization_name: IT
+    - common_name: www.lab.com
+  tasks:
+    - name: Generate an OpenSSL ECDSA private key
+      tags: certs
+      community.crypto.openssl_privatekey:
+        path: "/etc/ssl/certs/{{ server_hostname }}.pem.ecdsa.key"
+        size: "{{ key_size }}"
+        type: "ECC"
+        curve: "secp256r1"
+        backup: yes
+
+    - name: Generate an OpenSSL Certificate Signing Request with Subject *.lab.com
+      tags: certs
+      community.crypto.openssl_csr:
+        path: "/etc/ssl/certs/{{ server_hostname }}.ecdsa.csr"
+        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.ecdsa.key"
+        country_name: "{{ country_name }}"
+        organization_name: "{{ organization_name }}"
+        email_address: "{{ email_address }}"
+        common_name: "{{ common_name }}"
+
+    - name: Generate a Self Signed OpenSSL certificate
+      tags: certs
+      community.crypto.x509_certificate:
+        path: "/etc/ssl/certs/{{ server_hostname }}.pem.ecdsa"
+        privatekey_path: "/etc/ssl/certs/{{ server_hostname }}.pem.ecdsa.key"
+        csr_path: "/etc/ssl/certs/{{ server_hostname }}.ecdsa.csr"
+        provider: "selfsigned"
+
+    - name: copy redirect map
       tags: haproxycfg
       copy:
-        src: haproxy.cfg
+        src: redirect.map
+        dest: /etc/haproxy/redirect.map
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: copy convert map
+      tags: haproxycfg
+      copy:
+        src: convert.map
+        dest: /etc/haproxy/convert.map
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: copy haproxy file
+      tags: haproxycfg
+      copy:
+        src: /home/rod/haproxy-project/haproxy-git/files/haproxy.cfg
         dest: /etc/haproxy/haproxy.cfg
         owner: root
         group: root

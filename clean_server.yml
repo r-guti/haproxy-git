@@ -4,21 +4,25 @@
   become: true
   tasks:
 
-  - name: check if ssl files exists
-    stat:
-      path: /etc/ssl/certs/www.lab*
-    register: file_status
+  - name: Find files to delete
+    tags: del-certs
+    find:
+      paths: /etc/ssl/certs/
+      patterns: "lab*"
+      file_type: file
+    register: files_to_delete
 
-  - name: delete www.lab.com ssl files
-    file:
-      path: /etc/ssl/certs/www.lab*
-      state: absent
-    register: delete_result
-    when: file_status.stat.exists
-
-  - name: show delete result
+  - name: Display files to be deleted
+    tags: del-certs
     debug:
-      var: delete_result
+      var: files_to_delete.files
+
+  - name: Delete files
+    tags: del-certs
+    file:
+      path: "{{ item.path }}"
+      state: absent
+    with_items: "{{ files_to_delete.files }}"
 
   - name: stop UFW service
     ansible.builtin.systemd:
